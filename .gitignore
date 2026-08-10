@@ -1,0 +1,28 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Local runtime
+agent_guardian.db
+agent_guardian.db-*
+agent_guardian_media/
+dataset.jsonl
+swarm_dpo.jsonl
+benchmark_report.json
+train_out/
+dist/
+dist_audit/
+.env
+.venv/
+venv/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

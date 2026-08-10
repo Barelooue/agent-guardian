@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Guardian · Control Plane</title>
+  <style>
+    :root {
+      --bg: #0f1419; --panel: #1a2332; --text: #e7ecf3; --muted: #8b9bb4;
+      --accent: #3d8bfd; --danger: #e35d6a; --ok: #3ecf8e; --line: #2a3548; --mark: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1b2a44, var(--bg));
+      color: var(--text); min-height: 100vh;
+    }
+    header {
+      padding: 0.85rem 1.25rem; border-bottom: 1px solid var(--line);
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;
+    }
+    header h1 { margin: 0; font-size: 1.05rem; font-weight: 650; }
+    header .meta { color: var(--muted); font-size: 0.82rem; }
+    .tabs { display: flex; gap: 0.4rem; }
+    .tabs button {
+      border: 1px solid var(--line); background: #243247; color: var(--text);
+      border-radius: 8px; padding: 0.4rem 0.85rem; cursor: pointer;
+    }
+    .tabs button.active { border-color: var(--accent); color: var(--accent); }
+    .view { display: none; }
+    .view.active { display: block; }
+    main.intervene {
+      display: grid; grid-template-columns: minmax(240px, 320px) 1fr; min-height: calc(100vh - 70px);
+    }
+    @media (max-width: 900px) { main.intervene { grid-template-columns: 1fr; } }
+    .list, .detail { padding: 1rem; }
+    .list { border-right: 1px solid var(--line); background: rgba(0,0,0,0.15); }
+    .item {
+      border: 1px solid var(--line); background: var(--panel); border-radius: 10px;
+      padding: 0.85rem; margin-bottom: 0.65rem; cursor: pointer;
+    }
+    .item:hover, .item.active { border-color: var(--accent); }
+    .item .title { font-weight: 600; margin-bottom: 0.25rem; }
+    .item .reason { color: var(--muted); font-size: 0.85rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .empty { color: var(--muted); padding: 2rem 0.5rem; text-align: center; }
+    .detail-panel { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 1.1rem; max-width: 960px; }
+    .detail-panel h2 { margin: 0 0 0.5rem; font-size: 1.25rem; }
+    .detail-panel .reason { color: var(--muted); margin-bottom: 0.85rem; white-space: pre-wrap; }
+    .canvas-wrap { position: relative; display: inline-block; max-width: 100%; background: #000; border-radius: 8px; border: 1px solid var(--line); margin-bottom: 0.75rem; line-height: 0; user-select: none; }
+    .canvas-wrap img { max-width: 100%; max-height: 420px; display: block; }
+    .canvas-wrap canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; cursor: crosshair; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.65rem; }
+    .toolbar button, .toolbar label { border: 1px solid var(--line); background: #243247; color: var(--text); border-radius: 7px; padding: 0.35rem 0.7rem; font-size: 0.85rem; cursor: pointer; }
+    .toolbar button.active { border-color: var(--mark); color: var(--mark); }
+    .toolbar input[type="text"] { background: #111827; border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 0.35rem 0.55rem; min-width: 120px; }
+    .mark-info { color: var(--mark); font-size: 0.82rem; margin-bottom: 0.75rem; min-height: 1.2em; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+    button.opt { border: 0; border-radius: 8px; padding: 0.65rem 1rem; font-size: 0.95rem; cursor: pointer; color: #fff; background: var(--accent); }
+    button.opt.danger { background: var(--danger); }
+    button.opt.neutral { background: #40506a; }
+    .rollback-box { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; gap: 0.35rem; }
+    .toast { position: fixed; right: 1rem; bottom: 1rem; background: #223049; border: 1px solid var(--line); padding: 0.7rem 1rem; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 40; }
+    .toast.show { opacity: 1; }
+    label.sound { display: flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.85rem; }
+
+    /* Swarm dashboard */
+    .swarm-wrap { padding: 1rem 1.25rem 2rem; }
+    .swarm-bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 1rem; }
+    .swarm-bar button, .swarm-bar input {
+      border: 1px solid var(--line); background: #243247; color: var(--text);
+      border-radius: 8px; padding: 0.45rem 0.8rem; cursor: pointer;
+    }
+    .swarm-bar input { cursor: text; min-width: 140px; }
+    .ws-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; display: inline-block; }
+    .ws-dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem;
+    }
+    .card {
+      border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 0.9rem;
+      display: flex; flex-direction: column; gap: 0.45rem; min-height: 220px;
+    }
+    .card .row { display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; }
+    .badge {
+      font-size: 0.72rem; padding: 0.15rem 0.45rem; border-radius: 999px; border: 1px solid var(--line);
+      color: var(--muted); text-transform: uppercase;
+    }
+    .badge.running { color: var(--ok); border-color: var(--ok); }
+    .badge.takeover, .badge.intervenced { color: var(--danger); border-color: var(--danger); }
+    .card .shot {
+      width: 100%; height: 120px; object-fit: cover; background: #0b1220; border-radius: 8px; border: 1px solid var(--line);
+    }
+    .card .thought, .card .action { font-size: 0.82rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card .action { color: #c4d4f0; }
+    .card button.takeover {
+      margin-top: auto; border: 0; border-radius: 8px; padding: 0.55rem 0.75rem;
+      background: var(--danger); color: #fff; cursor: pointer; font-weight: 600;
+    }
+    .modal-bg {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: none;
+      align-items: center; justify-content: center; z-index: 30;
+    }
+    .modal-bg.show { display: flex; }
+    .modal {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 1.1rem; width: min(420px, 92vw);
+    }
+    .modal h3 { margin: 0 0 0.6rem; }
+    .modal textarea {
+      width: 100%; min-height: 90px; background: #111827; color: var(--text);
+      border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem; resize: vertical;
+    }
+    .modal .actions { margin-top: 0.75rem; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Agent Guardian · Control Plane</h1>
+      <div class="meta">干预决策 · Swarm 监控大厅 · 画布纠偏 / Force Takeover</div>
+    </div>
+    <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+      <div class="tabs">
+        <button type="button" id="tab-intervene" class="active">干预队列</button>
+        <button type="button" id="tab-swarm">Swarm 大厅</button>
+      </div>
+      <label class="sound"><input type="checkbox" id="sound" checked /> 提示音</label>
+    </div>
+  </header>
+
+  <div id="view-intervene" class="view active">
+    <main class="intervene">
+      <section class="list"><div id="queue"></div></section>
+      <section class="detail"><div id="detail" class="empty">选择左侧一条待处理干预</div></section>
+    </main>
+  </div>
+
+  <div id="view-swarm" class="view">
+    <div class="swarm-wrap">
+      <div class="swarm-bar">
+        <span><span id="ws-dot" class="ws-dot"></span> WS /ws/swarm</span>
+        <input id="tenant-filter" placeholder="tenant_id (optional)" />
+        <button type="button" id="btn-refresh-swarm">刷新</button>
+        <button type="button" id="btn-seed-demo">注册演示 Agents</button>
+        <span class="meta" id="swarm-count">0 agents</span>
+      </div>
+      <div id="swarm-grid" class="grid"></div>
+    </div>
+  </div>
+
+  <div id="takeover-modal" class="modal-bg">
+    <div class="modal">
+      <h3>强行夺权 · Force Takeover</h3>
+      <div class="meta" id="takeover-agent" style="margin-bottom:0.5rem;color:var(--muted)"></div>
+      <textarea id="takeover-instruction" placeholder="输入纠偏指令，例如：Stop before payment and ask human."></textarea>
+      <div class="actions">
+        <button type="button" class="opt neutral" id="takeover-cancel">取消</button>
+        <button type="button" class="opt danger" id="takeover-confirm">立即夺权</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const queueEl = document.getElementById("queue");
+    const detailEl = document.getElementById("detail");
+    const toastEl = document.getElementById("toast");
+    const soundEl = document.getElementById("sound");
+    const swarmGrid = document.getElementById("swarm-grid");
+    let items = [], selectedId = null, knownIds = new Set(), firstLoad = true;
+    let markMode = "point", annotation = null, dragStart = null, imgNatural = { w: 0, h: 0 };
+    let swarmAgents = {}, takeoverTarget = null, swarmWs = null;
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      setTimeout(() => toastEl.classList.remove("show"), 2200);
+    }
+    function beep() {
+      if (!soundEl.checked) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination); o.frequency.value = 880; g.gain.value = 0.04; o.start();
+        setTimeout(() => { o.stop(); ctx.close(); }, 180);
+      } catch (_) {}
+    }
+    function escapeHtml(s) {
+      return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+    }
+    function styleClass(opt) {
+      if (opt.destructive || opt.style === "danger") return "danger";
+      if (opt.style === "primary") return "";
+      return "neutral";
+    }
+
+    // ----- tabs -----
+    document.getElementById("tab-intervene").onclick = () => switchView("intervene");
+    document.getElementById("tab-swarm").onclick = () => switchView("swarm");
+    function switchView(name) {
+      document.getElementById("view-intervene").classList.toggle("active", name === "intervene");
+      document.getElementById("view-swarm").classList.toggle("active", name === "swarm");
+      document.getElementById("tab-intervene").classList.toggle("active", name === "intervene");
+      document.getElementById("tab-swarm").classList.toggle("active", name === "swarm");
+      if (name === "swarm") { refreshSwarm(); connectSwarmWs(); }
+    }
+
+    // ----- interventions (Phase 2/6) -----
+    function renderList() {
+      if (!items.length) { queueEl.innerHTML = '<div class="empty">暂无待处理干预</div>'; return; }
+      queueEl.innerHTML = items.map((it) => `
+        <div class="item ${it.intervention_id === selectedId ? "active" : ""}" data-id="${it.intervention_id}">
+          <div class="title">${escapeHtml(it.title)}</div>
+          <div class="reason">${escapeHtml(it.reason)}</div>
+          <div class="meta" style="margin-top:0.35rem;font-size:0.75rem;color:var(--muted)">${it.status} · ${it.intervention_id.slice(0, 8)}…</div>
+        </div>`).join("");
+      queueEl.querySelectorAll(".item").forEach((el) => el.addEventListener("click", () => {
+        selectedId = el.dataset.id; annotation = null; renderList(); renderDetail();
+      }));
+    }
+    function canvasCoords(canvas, evt) {
+      const rect = canvas.getBoundingClientRect();
+      return { x: (evt.clientX - rect.left) / rect.width, y: (evt.clientY - rect.top) / rect.height };
+    }
+    function drawAnnotation(canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!annotation) return;
+      ctx.strokeStyle = "#fbbf24"; ctx.fillStyle = "rgba(251,191,36,0.25)"; ctx.lineWidth = 2;
+      if (annotation.type === "point") {
+        const x = annotation.x * canvas.width, y = annotation.y * canvas.height;
+        ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(x - 14, y); ctx.lineTo(x + 14, y); ctx.moveTo(x, y - 14); ctx.lineTo(x, y + 14); ctx.stroke();
+      } else {
+        const x = annotation.x * canvas.width, y = annotation.y * canvas.height;
+        const w = (annotation.x2 - annotation.x) * canvas.width, h = (annotation.y2 - annotation.y) * canvas.height;
+        ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+      }
+    }
+    function labelValue() {
+      const el = document.getElementById("mark-label");
+      return (el && el.value.trim()) || (markMode === "point" ? "click_here" : "focus_region");
+    }
+    function updateMarkInfo() {
+      const el = document.getElementById("mark-info"); if (!el) return;
+      if (!annotation) { el.textContent = "尚未标注 — 点击截图打点，或拖拽框选区域"; return; }
+      if (annotation.type === "point") el.textContent = `点选: (${annotation.x.toFixed(3)}, ${annotation.y.toFixed(3)}) · ${annotation.label}`;
+      else el.textContent = `框选: [${annotation.x.toFixed(3)}, ${annotation.y.toFixed(3)}] → [${annotation.x2.toFixed(3)}, ${annotation.y2.toFixed(3)}] · ${annotation.label}`;
+    }
+    function bindCanvas(img, canvas) {
+      const syncSize = () => {
+        canvas.width = img.clientWidth || img.naturalWidth;
+        canvas.height = img.clientHeight || img.naturalHeight;
+        imgNatural = { w: img.naturalWidth, h: img.naturalHeight };
+        drawAnnotation(canvas);
+      };
+      if (img.complete) syncSize(); else img.onload = syncSize;
+      canvas.onmousedown = (evt) => {
+        const p = canvasCoords(canvas, evt);
+        if (markMode === "point") {
+          annotation = { type: "point", x: p.x, y: p.y, label: labelValue(), normalized: true, image_width: imgNatural.w || null, image_height: imgNatural.h || null };
+          drawAnnotation(canvas); updateMarkInfo(); return;
+        }
+        dragStart = p;
+      };
+      canvas.onmousemove = (evt) => {
+        if (!dragStart || markMode !== "bbox") return;
+        const p = canvasCoords(canvas, evt);
+        annotation = { type: "bbox", x: Math.min(dragStart.x, p.x), y: Math.min(dragStart.y, p.y), x2: Math.max(dragStart.x, p.x), y2: Math.max(dragStart.y, p.y), label: labelValue(), normalized: true, image_width: imgNatural.w || null, image_height: imgNatural.h || null };
+        drawAnnotation(canvas); updateMarkInfo();
+      };
+      canvas.onmouseup = () => { dragStart = null; };
+      canvas.onmouseleave = () => { dragStart = null; };
+    }
+    function renderDetail() {
+      const it = items.find((x) => x.intervention_id === selectedId);
+      if (!it) { detailEl.className = "empty"; detailEl.textContent = "选择左侧一条待处理干预"; return; }
+      detailEl.className = "detail-panel";
+      const hasShot = it.snapshot && it.snapshot.url;
+      const shotBlock = hasShot ? `
+        <div class="toolbar">
+          <button type="button" id="mode-point" class="${markMode==='point'?'active':''}">点击标记 (x,y)</button>
+          <button type="button" id="mode-bbox" class="${markMode==='bbox'?'active':''}">拖拽框选 BBox</button>
+          <button type="button" id="mode-clear">清除标注</button>
+          <label>label <input id="mark-label" type="text" value="click_here" /></label>
+        </div>
+        <div class="canvas-wrap"><img id="shot-img" src="${it.snapshot.url}" alt="snapshot" /><canvas id="shot-canvas"></canvas></div>
+        <div class="mark-info" id="mark-info"></div>` : `<div class="empty" style="padding:1rem 0">无截图</div>`;
+      const buttons = it.options.map((opt) => `<button class="opt ${styleClass(opt)}" data-oid="${opt.id}">${escapeHtml(opt.label)}</button>`).join("");
+      detailEl.innerHTML = `<h2>${escapeHtml(it.title)}</h2><div class="reason">${escapeHtml(it.reason)}</div>${shotBlock}
+        <div class="actions">${buttons}<label class="rollback-box"><input type="checkbox" id="rollback-on-deny" /> Deny 时回滚 1 步</label></div>
+        <div class="meta" style="margin-top:1rem;font-size:0.8rem;color:var(--muted)">id=${it.intervention_id}</div>`;
+      if (hasShot) {
+        const img = document.getElementById("shot-img"), canvas = document.getElementById("shot-canvas");
+        bindCanvas(img, canvas);
+        document.getElementById("mode-point").onclick = () => { markMode = "point"; annotation = null; renderDetail(); };
+        document.getElementById("mode-bbox").onclick = () => { markMode = "bbox"; annotation = null; renderDetail(); };
+        document.getElementById("mode-clear").onclick = () => { annotation = null; drawAnnotation(canvas); updateMarkInfo(); };
+        updateMarkInfo();
+      }
+      detailEl.querySelectorAll("button.opt").forEach((btn) => btn.addEventListener("click", () => decide(it.intervention_id, btn.dataset.oid)));
+    }
+    async function decide(interventionId, optionId) {
+      const rollbackEl = document.getElementById("rollback-on-deny");
+      const wantRollback = rollbackEl && rollbackEl.checked && optionId === "deny";
+      const payload = { intervention_id: interventionId, option_id: optionId, source: "web_ui", decided_at: new Date().toISOString(), operator_id: "web:console" };
+      if (annotation && optionId === "approve") payload.spatial = { ...annotation, label: labelValue() };
+      if (wantRollback) payload.rollback_steps = 1;
+      const body = { protocol_version: "1.0.0", message_type: "intervention.decision", message_id: crypto.randomUUID(), timestamp: new Date().toISOString(), payload };
+      const resp = await fetch(`/v1/interventions/${interventionId}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await resp.json();
+      if (!resp.ok) { toast("决策失败: " + (data.payload && data.payload.message || resp.status)); return; }
+      toast("已提交: " + optionId); selectedId = null; annotation = null; await refreshInterventions();
+    }
+    async function refreshInterventions() {
+      const resp = await fetch("/v1/interventions?status=open");
+      const data = await resp.json();
+      const next = (data.items || []);
+      const nextIds = new Set(next.map((x) => x.intervention_id));
+      if (!firstLoad) { for (const id of nextIds) { if (!knownIds.has(id)) { beep(); break; } } }
+      firstLoad = false; knownIds = nextIds; items = next;
+      if (selectedId && !nextIds.has(selectedId)) selectedId = null;
+      if (!selectedId && items.length) selectedId = items[0].intervention_id;
+      renderList(); renderDetail();
+    }
+
+    // ----- swarm dashboard -----
+    function renderSwarm() {
+      const list = Object.values(swarmAgents);
+      document.getElementById("swarm-count").textContent = list.length + " agents";
+      if (!list.length) { swarmGrid.innerHTML = '<div class="empty">暂无 Agent — 点击「注册演示 Agents」或调用 POST /api/swarm/agents</div>'; return; }
+      swarmGrid.innerHTML = list.map((a) => {
+        const shot = a.last_screenshot
+          ? (String(a.last_screenshot).startsWith("/") || String(a.last_screenshot).startsWith("http")
+              ? `<img class="shot" src="${a.last_screenshot}" alt="shot" />`
+              : `<div class="shot" style="display:grid;place-items:center;color:var(--muted);font-size:0.8rem">embedded frame</div>`)
+          : `<div class="shot" style="display:grid;place-items:center;color:var(--muted);font-size:0.8rem">no screenshot</div>`;
+        return `<div class="card" data-aid="${escapeHtml(a.agent_id)}">
+          <div class="row"><strong>${escapeHtml(a.agent_id)}</strong><span class="badge ${escapeHtml(a.status)}">${escapeHtml(a.status)}</span></div>
+          <div class="meta" style="font-size:0.78rem;color:var(--muted)">${escapeHtml(a.agent_type)} · ${escapeHtml(a.tenant_id)}</div>
+          ${shot}
+          <div class="thought">💭 ${escapeHtml(a.last_thought || "—")}</div>
+          <div class="action">⚡ ${escapeHtml(a.last_action || "—")}</div>
+          <button type="button" class="takeover" data-aid="${escapeHtml(a.agent_id)}">强行夺权 (Force Takeover)</button>
+        </div>`;
+      }).join("");
+      swarmGrid.querySelectorAll("button.takeover").forEach((btn) => {
+        btn.onclick = () => openTakeover(btn.dataset.aid);
+      });
+    }
+    async function refreshSwarm() {
+      const tenant = document.getElementById("tenant-filter").value.trim();
+      const url = tenant ? `/api/swarm/agents?tenant_id=${encodeURIComponent(tenant)}` : "/api/swarm/agents";
+      const resp = await fetch(url);
+      const data = await resp.json();
+      swarmAgents = {};
+      for (const a of (data.items || [])) swarmAgents[a.agent_id] = a;
+      renderSwarm();
+    }
+    function applyShadowEvent(ev) {
+      const a = swarmAgents[ev.agent_id] || {
+        agent_id: ev.agent_id, agent_type: "?", tenant_id: ev.tenant_id, status: "running",
+        last_thought: null, last_action: null, last_screenshot: null,
+      };
+      if (ev.type === "thought") a.last_thought = ev.payload.thought;
+      if (ev.type === "action") a.last_action = ev.payload.action;
+      if (ev.type === "screenshot") a.last_screenshot = ev.payload.image_url || a.last_screenshot;
+      if (ev.type === "status" && ev.payload.status) a.status = ev.payload.status;
+      swarmAgents[ev.agent_id] = a;
+      renderSwarm();
+    }
+    function connectSwarmWs() {
+      if (swarmWs && (swarmWs.readyState === WebSocket.OPEN || swarmWs.readyState === WebSocket.CONNECTING)) return;
+      const tenant = document.getElementById("tenant-filter").value.trim();
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const qs = tenant ? `?tenant_id=${encodeURIComponent(tenant)}` : "";
+      swarmWs = new WebSocket(`${proto}://${location.host}/ws/swarm${qs}`);
+      const dot = document.getElementById("ws-dot");
+      swarmWs.onopen = () => dot.classList.add("on");
+      swarmWs.onclose = () => { dot.classList.remove("on"); setTimeout(connectSwarmWs, 2000); };
+      swarmWs.onmessage = (msg) => {
+        const data = JSON.parse(msg.data);
+        if (data.type === "shadow" && data.event) applyShadowEvent(data.event);
+        if (data.type === "takeover_ack") toast("夺权已下发: " + data.agent_id);
+        if (data.type === "error") toast(data.message || "ws error");
+      };
+    }
+    function openTakeover(agentId) {
+      takeoverTarget = agentId;
+      document.getElementById("takeover-agent").textContent = "Agent: " + agentId;
+      document.getElementById("takeover-instruction").value = "Force pause and await human guidance.";
+      document.getElementById("takeover-modal").classList.add("show");
+    }
+    document.getElementById("takeover-cancel").onclick = () => {
+      document.getElementById("takeover-modal").classList.remove("show"); takeoverTarget = null;
+    };
+    document.getElementById("takeover-confirm").onclick = async () => {
+      if (!takeoverTarget) return;
+      const instruction = document.getElementById("takeover-instruction").value.trim();
+      const resp = await fetch(`/api/swarm/agents/${encodeURIComponent(takeoverTarget)}/takeover`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction, operator_id: "web:console", role: "operator" }),
+      });
+      const data = await resp.json();
+      document.getElementById("takeover-modal").classList.remove("show");
+      if (!resp.ok) { toast(data.error || "takeover failed"); return; }
+      toast("Force Takeover → " + takeoverTarget);
+      if (swarmAgents[takeoverTarget]) swarmAgents[takeoverTarget].status = "takeover";
+      renderSwarm();
+      takeoverTarget = null;
+    };
+    document.getElementById("btn-refresh-swarm").onclick = refreshSwarm;
+    document.getElementById("btn-seed-demo").onclick = async () => {
+      const demos = [
+        { agent_id: "browser-checkout", agent_type: "browser-use", tenant_id: "demo", thought: "Looking at captcha", action: "wait:#captcha", shot: null },
+        { agent_id: "finance-ledger", agent_type: "finance", tenant_id: "demo", thought: "Preparing wire transfer", action: "fill:amount", shot: null },
+        { agent_id: "ops-deploy", agent_type: "ops", tenant_id: "demo", thought: "Checking prod rollout", action: "kubectl:apply", shot: null },
+      ];
+      for (const d of demos) {
+        await fetch("/api/swarm/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(d) });
+        await fetch(`/api/swarm/agents/${d.agent_id}/observe`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ thought: d.thought, action: d.action, screenshot_url: d.shot }),
+        });
+      }
+      toast("已注册 3 个演示 Agent");
+      await refreshSwarm();
+    };
+
+    refreshInterventions();
+    setInterval(refreshInterventions, 2000);
+  </script>
+</body>
+</html>

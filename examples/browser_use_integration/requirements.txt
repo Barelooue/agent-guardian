@@ -1,0 +1,5 @@
+# Optional deps for Browser-Use integration demos
+playwright>=1.40
+browser-use>=0.1.40
+# LLM provider used by demo_browser_use_agent.py (pick one your key supports)
+openai>=1.40
