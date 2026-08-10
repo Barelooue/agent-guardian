@@ -39,12 +39,11 @@ dependencies = [
   "pillow>=10.0",
 ]
 
-# Replace <you>/<repo> with your GitHub path before publishing.
 [project.urls]
-Homepage = "https://github.com/agent-guardian/agent-guardian"
-Documentation = "https://github.com/agent-guardian/agent-guardian#readme"
-Issues = "https://github.com/agent-guardian/agent-guardian/issues"
-Changelog = "https://github.com/agent-guardian/agent-guardian/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Barelooue/agent-guardian"
+Documentation = "https://github.com/Barelooue/agent-guardian#readme"
+Issues = "https://github.com/Barelooue/agent-guardian/issues"
+Changelog = "https://github.com/Barelooue/agent-guardian/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

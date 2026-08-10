@@ -65,7 +65,7 @@ Docs: [Protocol](./docs/protocol.md) · [Roadmap](./ROADMAP.md) · [Changelog](.
 ### 1. Install & start Daemon
 
 ```powershell
-git clone https://github.com/<you>/agent-guardian.git
+git clone https://github.com/Barelooue/agent-guardian.git
 cd agent-guardian
 pip install -e ".[dev]"
 

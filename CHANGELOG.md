@@ -52,5 +52,5 @@ First public release of **Agent Guardian** — lightweight Human-in-the-Loop mid
 - Claude Computer Use adapter remains on the Phase 3/4 backlog
 - Optional extras: `pip install -e ".[browser]"` / `".[browser-use]"` / `".[dev]"`
 
-[0.2.0]: https://github.com/agent-guardian/agent-guardian/releases/tag/v0.2.0
-[0.1.0]: https://github.com/agent-guardian/agent-guardian/releases/tag/v0.1.0
+[0.2.0]: https://github.com/Barelooue/agent-guardian/releases/tag/v0.2.0
+[0.1.0]: https://github.com/Barelooue/agent-guardian/releases/tag/v0.1.0
